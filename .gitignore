@@ -3,3 +3,8 @@
 
 # Cargo
 /target
+
+# Project
+backup/
+.backupsrc
+.backupignore
