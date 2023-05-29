@@ -1,5 +1,3 @@
-mod reader;
-
 use std::fs;
 use std::fs::{copy, create_dir, create_dir_all, metadata, read_dir, remove_dir, remove_dir_all, remove_file};
 use std::path::Path;
