@@ -6,14 +6,19 @@ pub static BACKUP_SRC: &str = ".backupsrc";
 pub static BACKUP_IGNORE: &str = ".backupignore";
 pub static BACKUP_DIR: &str = "backup";
 
-pub fn load_src_files() -> Vec<String> {
+pub fn load_src_files() -> Result<Vec<String>, std::io::Error> {
     let mut files: Vec<String> = Vec::new();
-    let content = fs::read_to_string(BACKUP_SRC).unwrap();
+    let content = fs::read_to_string(BACKUP_SRC);
 
-    for line in content.lines() {
-        files.push(line.to_string());
+    match content {
+        Ok(content) => {
+            for line in content.lines() {
+                files.push(line.to_string());
+            }
+            Ok(files)
+        },
+        Err(e) => Err(e)
     }
-    files
 }
 
 pub fn load_ignore_files(path: String) -> Vec<String> {
