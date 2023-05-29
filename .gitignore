@@ -8,3 +8,4 @@
 backup/
 .backupsrc
 .backupignore
+.env
