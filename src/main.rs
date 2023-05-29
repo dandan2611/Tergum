@@ -1,15 +1,14 @@
-use std::fs;
-use std::fs::{copy, create_dir, create_dir_all, metadata, read_dir, remove_dir, remove_dir_all, remove_file};
+use std::fs::{create_dir_all, metadata, remove_dir_all};
 use std::path::Path;
-use fs_extra::dir;
-use fs_extra::dir::{copy_with_progress};
+
 use glob::glob;
 use log::{debug, info};
 use simple_logger::SimpleLogger;
 
-static BACKUP_SRC: &str = ".backupsrc";
-static BACKUP_IGNORE: &str = ".backupignore";
-static BACKUP_DIR: &str = "backup";
+use crate::local::reader::{BACKUP_DIR, BACKUP_IGNORE, load_ignore_files, load_src_files};
+use crate::local::tfs::copy_dir;
+
+mod local;
 
 #[cfg(target_os = "windows")]
 static FILE_SPLITTER: &str = "\\";
@@ -17,66 +16,6 @@ static FILE_SPLITTER: &str = "\\";
 static FILE_SPLITTER: &str = "/";
 #[cfg(target_os = "macos")]
 static FILE_SPLITTER: &str = "/";
-
-fn load_src_files() -> Vec<String> {
-    let mut files: Vec<String> = Vec::new();
-    let content = fs::read_to_string(BACKUP_SRC).unwrap();
-
-    for line in content.lines() {
-        files.push(line.to_string());
-    }
-    files
-}
-
-fn load_ignore_file(path: String) -> Vec<String> {
-    let path = format!("{}{}{}", path, FILE_SPLITTER, BACKUP_IGNORE);
-    let mut files: Vec<String> = Vec::new();
-    let content_res = fs::read_to_string(path);
-
-    match content_res {
-        Ok(content) => {
-            for line in content.lines() {
-                files.push(line.to_string());
-            }
-        }
-        Err(_) => { }
-    };
-    files
-}
-
-fn copy_dir(src: &str, dest: &str, mut ignore: &Vec<String>) {
-    // Print ignore files
-    for i in ignore {
-        println!("Ignore file: {}", i);
-    }
-    let dir = fs::read_dir(src).unwrap();
-    let files = dir.filter(|f| {
-        let file = f.as_ref().unwrap();
-        let file_path = file.path();
-        let file_path_str = file_path.to_str().unwrap();
-        info!("Checking file: {}", file_path_str);
-        !ignore.contains(&file_path_str.to_string())
-    });
-
-    for file in files {
-        let file = file.unwrap();
-        let file_type = file.file_type().unwrap();
-        let file_name = file.file_name();
-        let file_name_str = file_name.to_str().unwrap();
-        let file_path = format!("{}{}{}", src, FILE_SPLITTER, file_name_str);
-        let dest_path = format!("{}{}{}", dest, FILE_SPLITTER, file_name_str);
-        if file_type.is_dir() {
-            copy_dir(&file_path, &dest_path, ignore);
-        } else {
-            let options = fs_extra::file::CopyOptions::new();
-            let path = Path::new(&dest_path);
-            let parent = path.parent().unwrap();
-            create_dir_all(parent).unwrap();
-            info!("Copying file: {} to {}", file_path, dest_path);
-            fs_extra::file::copy(&file_path, &dest_path, &options).unwrap();
-        }
-    }
-}
 
 fn main() {
     SimpleLogger::new().init().unwrap();
@@ -99,7 +38,7 @@ fn main() {
                         let ignore_meta = metadata(&ignore_file);
                         if ignore_meta.is_ok() {
                             info!("Found ignore file: {}", ignore_file);
-                            let i = load_ignore_file(parent_str.to_string());
+                            let i = load_ignore_files(parent_str.to_string());
                             for ignore_file in i {
                                 let ignore_file_glob = format!("{}{}{}", parent_str, FILE_SPLITTER, ignore_file);
                                 let gl = glob(&ignore_file_glob).unwrap();
