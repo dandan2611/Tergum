@@ -6,7 +6,6 @@ use fs_extra::dir::{copy_with_progress};
 use glob::glob;
 use log::{debug, info};
 use simple_logger::SimpleLogger;
-use crate::reader::read_file_content;
 
 static BACKUP_SRC: &str = ".backupsrc";
 static BACKUP_IGNORE: &str = ".backupignore";
@@ -21,7 +20,7 @@ static FILE_SPLITTER: &str = "/";
 
 fn load_src_files() -> Vec<String> {
     let mut files: Vec<String> = Vec::new();
-    let content = read_file_content(BACKUP_SRC.to_string());
+    let content = fs::read_to_string(BACKUP_SRC).unwrap();
 
     for line in content.lines() {
         files.push(line.to_string());
