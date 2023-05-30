@@ -152,5 +152,8 @@ pub fn compress_backup() -> Result<(), ()> {
     let mut tar = tar::Builder::new(encoder);
     tar.append_dir_all("backup", BACKUP_DIR).expect("Error compressing backup");
     info!("Backup compressed!");
+
+    // Remove backup dir
+    fs::remove_dir_all(BACKUP_DIR).expect("Error removing backup dir");
     Ok(())
 }
