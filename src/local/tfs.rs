@@ -138,8 +138,12 @@ pub fn copy_files(ctx: &ctx) -> Result<(), ()> {
     Ok(())
 }
 
-fn prune_old_backups(context: &ctx) {
+fn prune_old_local_backups(context: &ctx) {
     let max_count = context.config.max_count;
+
+    if max_count == 0 {
+        return;
+    }
     let backup_group_meta = fs::metadata(BACKUP_GROUP_DIR);
     if backup_group_meta.is_err() {
         return;
@@ -209,6 +213,6 @@ pub fn compress_backup(context: &ctx) -> Result<(), ()> {
     fs::remove_dir_all(BACKUP_DIR).expect("Error removing backup dir");
 
     // Prune old backups
-    prune_old_backups(context);
+    prune_old_local_backups(context);
     Ok(())
 }
