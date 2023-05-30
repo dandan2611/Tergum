@@ -4,7 +4,7 @@ use crate::FILE_SPLITTER;
 
 pub static BACKUP_SRC: &str = ".backupsrc";
 pub static BACKUP_IGNORE: &str = ".backupignore";
-pub static BACKUP_DIR: &str = "backup";
+pub static BACKUP_DIR: &str = "backupdata";
 
 pub fn load_src_files() -> Result<Vec<String>, std::io::Error> {
     let mut files: Vec<String> = Vec::new();

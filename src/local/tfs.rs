@@ -1,8 +1,13 @@
 use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
+use flate2::Compression;
+use flate2::read::GzEncoder;
 
 use glob::glob;
 use log::{debug, error, info};
+use zopfli::{BlockType, Options};
 use crate::FILE_SPLITTER;
 
 use crate::local::reader;
@@ -37,7 +42,7 @@ pub fn copy_dir(src: &str, dest: &str, ignore: &Vec<String>) {
     }
 }
 
-pub fn copy_files(ctx: &ctx) {
+pub fn copy_files(ctx: &ctx) -> Result<(), ()> {
     let mut files: Vec<String> = Vec::new();
     let mut ignore_files: Vec<String> = Vec::new();
     let src_files_res = reader::load_src_files();
@@ -52,9 +57,9 @@ pub fn copy_files(ctx: &ctx) {
                 error!("No src files found. Please create a {} file in the current directory.", BACKUP_SRC);
             } else {
                 error!("Error reading src files: {}", e);
-                return;
+                return Err(());
             }
-            return;
+            return Err(());
         }
     }
 
@@ -127,4 +132,16 @@ pub fn copy_files(ctx: &ctx) {
         }
     }
     info!("Copy complete!");
+    Ok(())
+}
+
+pub fn compress_backup() -> Result<(), ()> {
+    let current_time = chrono::Local::now();
+    let current_time_str = current_time.format("%Y-%m-%d-%H-%M-%S").to_string();
+    let tar_gz = File::create(format!("{}-backup.tar.gz", current_time_str)).unwrap();
+    let encoder = GzEncoder::new(&tar_gz, Compression::default());
+    let mut tar = tar::Builder::new(encoder);
+    tar.append_dir_all("backup", BACKUP_DIR).expect("Error compressing backup");
+    info!("Backup compressed!");
+    Ok(())
 }

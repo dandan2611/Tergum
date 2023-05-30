@@ -5,7 +5,7 @@
 /target
 
 # Project
-backup/
+backupdata/
 .backupsrc
 .backupignore
 .env
