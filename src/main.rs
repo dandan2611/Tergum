@@ -44,7 +44,7 @@ async fn main() {
         }
     };
 
-    match compress_backup() {
+    match compress_backup(&ctx) {
         Ok(_) => {},
         Err(()) => {
             error!("Error compressing backup");

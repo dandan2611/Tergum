@@ -1,7 +1,8 @@
 use std::fs;
-use std::fs::File;
+use std::fs::{DirEntry, File};
 use std::io::Write;
 use std::path::Path;
+use chrono::NaiveDateTime;
 use flate2::Compression;
 use flate2::read::GzEncoder;
 
@@ -137,7 +138,58 @@ pub fn copy_files(ctx: &ctx) -> Result<(), ()> {
     Ok(())
 }
 
-pub fn compress_backup() -> Result<(), ()> {
+fn prune_old_backups(context: &ctx) {
+    let max_count = context.config.max_count;
+    let backup_group_meta = fs::metadata(BACKUP_GROUP_DIR);
+    if backup_group_meta.is_err() {
+        return;
+    }
+
+    let mut files: Vec<DirEntry> = Vec::new();
+    for entry in fs::read_dir(BACKUP_GROUP_DIR).unwrap() {
+        let entry = entry.unwrap();
+        let file_type = entry.file_type().unwrap();
+        if file_type.is_file() {
+            files.push(entry);
+        }
+    }
+
+    let mut backup_files: Vec<String> = Vec::new();
+    for file in &files {
+        let file_name = file.file_name();
+        let file_name_str = file_name.to_str().unwrap();
+        if file_name_str.ends_with("-backup.tar.gz") {
+            backup_files.push(file_name_str.to_string());
+        }
+    }
+
+    info!("Found {} backups", files.len());
+
+    // Sort backup files by time
+    backup_files.sort_by(|a, b| {
+        let a_time = a.split("-backup.tar.gz").collect::<Vec<&str>>()[0];
+        let b_time = b.split("-backup.tar.gz").collect::<Vec<&str>>()[0];
+        let a_time = NaiveDateTime::parse_from_str(a_time, "%Y-%m-%d-%H-%M-%S").unwrap();
+        let b_time = NaiveDateTime::parse_from_str(b_time, "%Y-%m-%d-%H-%M-%S").unwrap();
+        a_time.cmp(&b_time)
+    });
+    backup_files.reverse();
+
+    // Remove old backups
+    let mut count = 0;
+    for file in backup_files {
+        if count >= max_count {
+            let file_path = format!("{}{}{}", BACKUP_GROUP_DIR, FILE_SPLITTER, file);
+            info!("Removing old backup: {}", file_path);
+            fs::remove_file(file_path).unwrap();
+        }
+        count += 1;
+    }
+
+    info!("Prune complete!");
+}
+
+pub fn compress_backup(context: &ctx) -> Result<(), ()> {
     // If BACKUP_GROUP_DIR does not exist, create it
     let backup_group_meta = fs::metadata(BACKUP_GROUP_DIR);
     if backup_group_meta.is_err() {
@@ -155,5 +207,8 @@ pub fn compress_backup() -> Result<(), ()> {
 
     // Remove backup dir
     fs::remove_dir_all(BACKUP_DIR).expect("Error removing backup dir");
+
+    // Prune old backups
+    prune_old_backups(context);
     Ok(())
 }
