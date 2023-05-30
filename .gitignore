@@ -6,6 +6,7 @@
 
 # Project
 backupdata/
+backups/
 .backupsrc
 .backupignore
 .env

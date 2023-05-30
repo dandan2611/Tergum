@@ -14,6 +14,8 @@ use crate::local::reader;
 use crate::local::reader::{BACKUP_DIR, BACKUP_IGNORE, BACKUP_SRC};
 use crate::types::ctx;
 
+pub static BACKUP_GROUP_DIR: &str = "backups";
+
 pub fn copy_dir(src: &str, dest: &str, ignore: &Vec<String>) {
     let dir = fs::read_dir(src).unwrap();
     let files = dir.filter(|f| {
@@ -136,9 +138,16 @@ pub fn copy_files(ctx: &ctx) -> Result<(), ()> {
 }
 
 pub fn compress_backup() -> Result<(), ()> {
+    // If BACKUP_GROUP_DIR does not exist, create it
+    let backup_group_meta = fs::metadata(BACKUP_GROUP_DIR);
+    if backup_group_meta.is_err() {
+        fs::create_dir_all(BACKUP_GROUP_DIR).unwrap();
+    }
+
+    // Compress backup
     let current_time = chrono::Local::now();
     let current_time_str = current_time.format("%Y-%m-%d-%H-%M-%S").to_string();
-    let tar_gz = File::create(format!("{}-backup.tar.gz", current_time_str)).unwrap();
+    let tar_gz = File::create(format!("{}{}{}-backup.tar.gz", BACKUP_GROUP_DIR, FILE_SPLITTER, current_time_str)).unwrap();
     let encoder = GzEncoder::new(&tar_gz, Compression::default());
     let mut tar = tar::Builder::new(encoder);
     tar.append_dir_all("backup", BACKUP_DIR).expect("Error compressing backup");
