@@ -13,5 +13,5 @@ pub struct Config {
     pub dry_run: bool,
 
     #[arg(short, long, default_value = "0")]
-    pub max_count: i16,
+    pub rotate_count: usize,
 }

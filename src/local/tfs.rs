@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::fs;
 use std::fs::{DirEntry, File};
 use std::io::Write;
@@ -139,9 +140,10 @@ pub fn copy_files(ctx: &ctx) -> Result<(), ()> {
 }
 
 fn prune_old_local_backups(context: &ctx) {
-    let max_count = context.config.max_count;
+    let max_count = context.config.rotate_count;
 
     if max_count == 0 {
+        info!("Rotation disabled. Skipping deletion of old backups!");
         return;
     }
     let backup_group_meta = fs::metadata(BACKUP_GROUP_DIR);
@@ -179,6 +181,16 @@ fn prune_old_local_backups(context: &ctx) {
     });
     backup_files.reverse();
 
+    if context.config.dry_run {
+        let to_remove = if backup_files.len() > max_count {
+            backup_files.len() - max_count
+        } else {
+            0
+        };
+        info!("Dry run: Would remove {} backups", to_remove);
+        return;
+    }
+
     // Remove old backups
     let mut count = 0;
     for file in backup_files {
@@ -201,9 +213,9 @@ pub fn compress_backup(context: &ctx) -> Result<(), ()> {
     }
 
     // Compress backup
-    let current_time = chrono::Local::now();
-    let current_time_str = current_time.format("%Y-%m-%d-%H-%M-%S").to_string();
-    let tar_gz = File::create(format!("{}{}{}-backup.tar.gz", BACKUP_GROUP_DIR, FILE_SPLITTER, current_time_str)).unwrap();
+    let archive_name = format!("{}{}{}", BACKUP_GROUP_DIR, FILE_SPLITTER, context.backup_filename);
+    info!("Creating archive {}", archive_name);
+    let tar_gz = File::create(archive_name).unwrap();
     let encoder = GzEncoder::new(&tar_gz, Compression::default());
     let mut tar = tar::Builder::new(encoder);
     tar.append_dir_all("backup", BACKUP_DIR).expect("Error compressing backup");
@@ -213,6 +225,6 @@ pub fn compress_backup(context: &ctx) -> Result<(), ()> {
     fs::remove_dir_all(BACKUP_DIR).expect("Error removing backup dir");
 
     // Prune old backups
-    prune_old_local_backups(context);
+    prune_old_local_backups(&context);
     Ok(())
 }

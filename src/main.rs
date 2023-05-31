@@ -3,9 +3,9 @@ use clap::Parser;
 use log::{error, info};
 use simple_logger::SimpleLogger;
 use crate::cmd::Config;
-use crate::local::tfs::{compress_backup, copy_files};
+use crate::local::tfs::{BACKUP_GROUP_DIR, compress_backup, copy_files};
 use dotenv::dotenv;
-use crate::remote::test;
+use crate::remote::{init_bucket, push_remote, test};
 
 mod local;
 mod cmd;
@@ -23,9 +23,15 @@ static FILE_SPLITTER: &str = "/";
 async fn main() {
     SimpleLogger::new().init().unwrap();
 
+    let current_time = chrono::Local::now();
+    let current_time_str = current_time.format("%Y-%m-%d-%H-%M-%S").to_string();
+    let filename = format!("{}-backup.tar.gz", current_time_str);
+
     let config = Config::parse();
-    let ctx: types::ctx = types::ctx {
-        config
+    let mut ctx: types::ctx = types::ctx {
+        backup_filename: filename,
+        config,
+        bucket: None,
     };
 
     info!("Launching backup utility");
@@ -51,5 +57,25 @@ async fn main() {
             exit(1);
         }
     }
-    //test().await;
+
+    if ctx.config.dry_run {
+        info!("Tool is in dry run mode, not pushing to remote S3");
+        exit(0);
+    }
+
+    if ctx.config.backup_only {
+        info!("Tool is in backup only mode, not pushing to remote S3");
+        exit(0);
+    }
+
+    match init_bucket().await {
+        Ok(bucket) => {
+            ctx.bucket = Some(bucket);
+        }
+        Err(_) => {
+            error!("Error initializing bucket");
+            exit(1);
+        }
+    }
+    push_remote(&ctx).await;
 }

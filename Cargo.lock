@@ -1632,6 +1632,7 @@ dependencies = [
  "simple_logger",
  "tar",
  "tokio",
+ "tokio-util",
  "zip",
  "zopfli",
 ]
