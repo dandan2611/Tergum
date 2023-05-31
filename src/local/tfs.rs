@@ -43,7 +43,7 @@ pub fn copy_dir(src: &str, dest: &str, ignore: &Vec<String>) {
     }
 }
 
-pub fn copy_files(ctx: &Ctx) -> Result<(), ()> {
+pub fn copy_files(_ctx: &Ctx) -> Result<(), ()> {
     let mut files: Vec<String> = Vec::new();
     let mut ignore_files: Vec<String> = Vec::new();
     let src_files_res = reader::load_src_files();
@@ -114,22 +114,20 @@ pub fn copy_files(ctx: &Ctx) -> Result<(), ()> {
     }
     fs::create_dir_all(BACKUP_DIR).unwrap();
     // Copy files
-    if !ctx.config.dry_run {
-        for file in &files {
-            let meta = fs::metadata(&file).unwrap();
-            if meta.is_dir() {
-                copy_dir(&file, &format!("{}{}{}", BACKUP_DIR, FILE_SPLITTER, file), &ignore_files);
-            } else {
-                let options = fs_extra::file::CopyOptions::new();
-                let final_path = format!("{}{}{}", BACKUP_DIR, FILE_SPLITTER, file);
-                let path = Path::new(&final_path);
-                let parent = path.parent().unwrap();
-                fs::create_dir_all(parent).unwrap();
-                if ignore_files.contains(&file) {
-                    continue;
-                }
-                fs_extra::file::copy(&file, &final_path, &options).unwrap();
+    for file in &files {
+        let meta = fs::metadata(&file).unwrap();
+        if meta.is_dir() {
+            copy_dir(&file, &format!("{}{}{}", BACKUP_DIR, FILE_SPLITTER, file), &ignore_files);
+        } else {
+            let options = fs_extra::file::CopyOptions::new();
+            let final_path = format!("{}{}{}", BACKUP_DIR, FILE_SPLITTER, file);
+            let path = Path::new(&final_path);
+            let parent = path.parent().unwrap();
+            fs::create_dir_all(parent).unwrap();
+            if ignore_files.contains(&file) {
+                continue;
             }
+            fs_extra::file::copy(&file, &final_path, &options).unwrap();
         }
     }
     info!("Copy complete!");
@@ -161,7 +159,7 @@ fn prune_old_local_backups(context: &Ctx) {
     for file in &files {
         let file_name = file.file_name();
         let file_name_str = file_name.to_str().unwrap();
-        if file_name_str.ends_with("-backup.tar.gz") {
+        if file_name_str.ends_with(format!("-backup{}", context.config.archive_format).as_str()) {
             backup_files.push(file_name_str.to_string());
         }
     }
@@ -169,13 +167,21 @@ fn prune_old_local_backups(context: &Ctx) {
     info!("Found {} backups", files.len());
 
     // Sort backup files by time
-    backup_files.sort_by(|a, b| {
-        let a_time = a.split("-backup.tar.gz").collect::<Vec<&str>>()[0];
-        let b_time = b.split("-backup.tar.gz").collect::<Vec<&str>>()[0];
-        let a_time = NaiveDateTime::parse_from_str(a_time, "%Y-%m-%d-%H-%M-%S").unwrap();
-        let b_time = NaiveDateTime::parse_from_str(b_time, "%Y-%m-%d-%H-%M-%S").unwrap();
-        a_time.cmp(&b_time)
-    });
+    if !context.config.timestamp_prefix {
+        backup_files.sort_by(|a, b| {
+            let a_time = a.split(format!("-backup{}", context.config.archive_format).as_str()).collect::<Vec<&str>>()[0];
+            let b_time = b.split(format!("-backup{}", context.config.archive_format).as_str()).collect::<Vec<&str>>()[0];
+            let a_time = NaiveDateTime::parse_from_str(a_time, "%Y-%m-%d-%H-%M-%S").unwrap();
+            let b_time = NaiveDateTime::parse_from_str(b_time, "%Y-%m-%d-%H-%M-%S").unwrap();
+            a_time.cmp(&b_time)
+        });
+    } else {
+        backup_files.sort_by(|a, b| {
+            let a_time = a.split(format!("-backup{}", context.config.archive_format).as_str()).collect::<Vec<&str>>()[0];
+            let b_time = b.split(format!("-backup{}", context.config.archive_format).as_str()).collect::<Vec<&str>>()[0];
+            a_time.cmp(&b_time)
+        });
+    }
     backup_files.reverse();
 
     if context.config.dry_run {
@@ -215,7 +221,7 @@ pub fn compress_backup(context: &Ctx) -> Result<(), ()> {
     let tar_gz = File::create(archive_name).unwrap();
     let encoder = GzEncoder::new(&tar_gz, Compression::default());
     let mut tar = tar::Builder::new(encoder);
-    tar.append_dir_all("backup", BACKUP_DIR).expect("Error compressing backup");
+    tar.append_dir_all("data", BACKUP_DIR).expect("Error compressing backup");
     info!("Backup compressed!");
 
     // Remove backup dir

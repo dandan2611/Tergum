@@ -73,23 +73,31 @@ pub async fn push_remote(ctx: &Ctx) {
     }
     let mut backups: Vec<String> = Vec::new();
     for object in objects {
-        if object.contains(".tar.gz") {
+        if object.contains(format!("-backup{}", ctx.config.archive_format).as_str()) {
             backups.push(object);
         }
     }
 
-    backups.sort_by(|a, b | {
-        // Remove prefix and suffix
-        let a_time = a.replace(&prefix, "");
-        let b_time = b.replace(&prefix, "");
-        let a_time = a_time.replace("-backup.tar.gz", "");
-        let b_time = b_time.replace("-backup.tar.gz", "");
-        let a_time = a_time.as_str();
-        let b_time = b_time.as_str();
-        let a_time = NaiveDateTime::parse_from_str(a_time, "%Y-%m-%d-%H-%M-%S").unwrap();
-        let b_time = NaiveDateTime::parse_from_str(b_time, "%Y-%m-%d-%H-%M-%S").unwrap();
-        a_time.cmp(&b_time)
-    });
+    if !ctx.config.timestamp_prefix {
+        backups.sort_by(|a, b| {
+            // Remove prefix and suffix
+            let a_time = a.replace(&prefix, "");
+            let b_time = b.replace(&prefix, "");
+            let a_time = a_time.replace(format!("-backup{}", ctx.config.archive_format).as_str(), "");
+            let b_time = b_time.replace(format!("-backup{}", ctx.config.archive_format).as_str(), "");
+            let a_time = a_time.as_str();
+            let b_time = b_time.as_str();
+            let a_time = NaiveDateTime::parse_from_str(a_time, "%Y-%m-%d-%H-%M-%S").unwrap();
+            let b_time = NaiveDateTime::parse_from_str(b_time, "%Y-%m-%d-%H-%M-%S").unwrap();
+            a_time.cmp(&b_time)
+        });
+    } else {
+        backups.sort_by(|a, b| {
+            let a_time = a.split(format!("-backup{}", ctx.config.archive_format).as_str()).collect::<Vec<&str>>()[0];
+            let b_time = b.split(format!("-backup{}", ctx.config.archive_format).as_str()).collect::<Vec<&str>>()[0];
+            a_time.cmp(&b_time)
+        });
+    }
     backups.reverse();
 
     let max_count = ctx.config.rotate_count;
