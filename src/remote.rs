@@ -31,14 +31,17 @@ pub async fn push_remote(ctx: &Ctx) {
     let prefix = get_prefix();
     let bucket = &ctx.bucket.as_ref().unwrap();
     // Push new backup
-    let backup_filename = &ctx.backup_filename;
+    let backup_filename = if ctx.config.push_only.is_none() { &ctx.backup_filename } else { &ctx.config.push_only.as_ref().unwrap() };
     info!("Pushing backup to remote");
 
     // Put object in bucket using chunked upload
-    let local_backup_filename = format!("{}{}{}", BACKUP_GROUP_DIR, FILE_SPLITTER, &backup_filename);
+    let local_backup_filename = if ctx.config.push_only.is_none() { format!("{}{}{}", BACKUP_GROUP_DIR, FILE_SPLITTER, &backup_filename) } else { backup_filename.clone() };
     info!("Opening file {}", &local_backup_filename);
     let mut file = tokio::fs::File::open(&local_backup_filename).await.unwrap();
-    let remote_filename = format!("{}{}", prefix, backup_filename);
+    // Get filename without path
+    let local_backup_filename_split: Vec<&str> = local_backup_filename.split(FILE_SPLITTER).collect();
+    let local_backup_filename = local_backup_filename_split[local_backup_filename_split.len() - 1];
+    let remote_filename = format!("{}{}", prefix, local_backup_filename);
     let result = bucket.put_object_stream(&mut file, &remote_filename).await;
     match result {
         Ok(_) => {
@@ -70,27 +73,40 @@ pub async fn push_remote(ctx: &Ctx) {
     }
     let mut backups: Vec<String> = Vec::new();
     for object in objects {
-        if object.contains(".tar.gz") {
+        if object.contains(format!("-backup{}", ctx.config.archive_format).as_str()) {
             backups.push(object);
         }
     }
 
-    backups.sort_by(|a, b | {
-        // Remove prefix and suffix
-        let a_time = a.replace(&prefix, "");
-        let b_time = b.replace(&prefix, "");
-        let a_time = a_time.replace("-backup.tar.gz", "");
-        let b_time = b_time.replace("-backup.tar.gz", "");
-        let a_time = a_time.as_str();
-        let b_time = b_time.as_str();
-        let a_time = NaiveDateTime::parse_from_str(a_time, "%Y-%m-%d-%H-%M-%S").unwrap();
-        let b_time = NaiveDateTime::parse_from_str(b_time, "%Y-%m-%d-%H-%M-%S").unwrap();
-        a_time.cmp(&b_time)
-    });
+    if !ctx.config.timestamp_prefix {
+        backups.sort_by(|a, b| {
+            // Remove prefix and suffix
+            let a_time = a.replace(&prefix, "");
+            let b_time = b.replace(&prefix, "");
+            let a_time = a_time.replace(format!("-backup{}", ctx.config.archive_format).as_str(), "");
+            let b_time = b_time.replace(format!("-backup{}", ctx.config.archive_format).as_str(), "");
+            let a_time = a_time.as_str();
+            let b_time = b_time.as_str();
+            let a_time = NaiveDateTime::parse_from_str(a_time, "%Y-%m-%d-%H-%M-%S").unwrap();
+            let b_time = NaiveDateTime::parse_from_str(b_time, "%Y-%m-%d-%H-%M-%S").unwrap();
+            a_time.cmp(&b_time)
+        });
+    } else {
+        backups.sort_by(|a, b| {
+            let a_time = a.split(format!("-backup{}", ctx.config.archive_format).as_str()).collect::<Vec<&str>>()[0];
+            let b_time = b.split(format!("-backup{}", ctx.config.archive_format).as_str()).collect::<Vec<&str>>()[0];
+            a_time.cmp(&b_time)
+        });
+    }
     backups.reverse();
 
     let max_count = ctx.config.rotate_count;
     let mut count = 0;
+
+    if max_count == 0 {
+        info!("No rotation count set, not pruning old remote backups");
+        return;
+    }
     for backup in &backups {
         if count >= max_count {
             info!("Deleting remote {}", backup);

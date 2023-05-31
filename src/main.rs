@@ -23,11 +23,16 @@ static FILE_SPLITTER: &str = "/";
 async fn main() {
     SimpleLogger::new().init().unwrap();
 
-    let current_time = chrono::Local::now();
-    let current_time_str = current_time.format("%Y-%m-%d-%H-%M-%S").to_string();
-    let filename = format!("{}-backup.tar.gz", current_time_str);
-
     let config = Config::parse();
+
+    let current_time = chrono::Local::now();
+    let current_time_str = if !config.timestamp_prefix {
+        current_time.format("%Y-%m-%d-%H-%M-%S").to_string()
+    } else {
+        format!("{}-{}", current_time.timestamp().to_string(), current_time.format("%Y-%m-%d-%H-%M-%S").to_string())
+    };
+    let filename = format!("{}-backup{}", current_time_str, config.archive_format);
+
     let mut ctx: types::Ctx = types::Ctx {
         backup_filename: filename,
         config,
@@ -42,19 +47,21 @@ async fn main() {
         info!("Running in dry run mode");
     }
 
-    match copy_files(&ctx) {
-        Ok(_) => {}
-        Err(_) => {
-            error!("Error copying files");
-            exit(1);
-        }
-    };
+    if ctx.config.push_only.is_none() {
+        match copy_files(&ctx) {
+            Ok(_) => {}
+            Err(_) => {
+                error!("Error copying files");
+                exit(1);
+            }
+        };
 
-    match compress_backup(&ctx) {
-        Ok(_) => {},
-        Err(()) => {
-            error!("Error compressing backup");
-            exit(1);
+        match compress_backup(&ctx) {
+            Ok(_) => {},
+            Err(()) => {
+                error!("Error compressing backup");
+                exit(1);
+            }
         }
     }
 
