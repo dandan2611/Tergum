@@ -53,7 +53,28 @@ pub async fn init_bucket() -> Result<Bucket, ()> {
 pub async fn push_remote(ctx: &ctx) {
     let prefix = get_prefix();
     let bucket = &ctx.bucket.as_ref().unwrap();
-    let result = bucket.list(prefix, None).await;
+    // Push new backup
+    let backup_filename = &ctx.backup_filename;
+    info!("Pushing backup to remote");
+
+    // Put object in bucket using chunked upload
+    let local_backup_filename = format!("{}{}{}", BACKUP_GROUP_DIR, FILE_SPLITTER, &backup_filename);
+    info!("Opening file {}", &local_backup_filename);
+    let mut file = tokio::fs::File::open(&local_backup_filename).await.unwrap();
+    let remote_filename = format!("{}{}", prefix, backup_filename);
+    let result = bucket.put_object_stream(&mut file, &remote_filename).await;
+    match result {
+        Ok(_) => {
+            info!("Backup pushed to remote");
+        },
+        Err(e) => {
+            error!("Error pushing backup to remote: {}", e);
+            return;
+        }
+    }
+
+    // Prune old backups
+    let result = bucket.list(prefix.clone(), None).await;
     let mut objects: Vec<String> = Vec::new();
     match result {
         Ok(listed) => {
@@ -70,8 +91,6 @@ pub async fn push_remote(ctx: &ctx) {
             return;
         }
     }
-
-    // Prune old backups
     let mut backups: Vec<String> = Vec::new();
     for object in objects {
         if object.contains(".tar.gz") {
@@ -80,8 +99,13 @@ pub async fn push_remote(ctx: &ctx) {
     }
 
     backups.sort_by(|a, b | {
-        let a_time = a.split("-backup.tar.gz").collect::<Vec<&str>>()[0];
-        let b_time = b.split("-backup.tar.gz").collect::<Vec<&str>>()[0];
+        // Remove prefix and suffix
+        let a_time = a.replace(&prefix, "");
+        let b_time = b.replace(&prefix, "");
+        let a_time = a_time.replace("-backup.tar.gz", "");
+        let b_time = b_time.replace("-backup.tar.gz", "");
+        let a_time = a_time.as_str();
+        let b_time = b_time.as_str();
         let a_time = NaiveDateTime::parse_from_str(a_time, "%Y-%m-%d-%H-%M-%S").unwrap();
         let b_time = NaiveDateTime::parse_from_str(b_time, "%Y-%m-%d-%H-%M-%S").unwrap();
         a_time.cmp(&b_time)
@@ -101,23 +125,5 @@ pub async fn push_remote(ctx: &ctx) {
             }
         }
         count += 1;
-    }
-
-    // Push new backup
-    let backup_filename = &ctx.backup_filename;
-    info!("Pushing backup to remote");
-
-    // Put object in bucket using chunked upload
-    let backup_filename = format!("{}{}{}", BACKUP_GROUP_DIR, FILE_SPLITTER, backup_filename);
-    info!("Opening file {}", &backup_filename);
-    let mut file = tokio::fs::File::open(&backup_filename).await.unwrap();
-    let result = bucket.put_object_stream(&mut file, &backup_filename).await;
-    match result {
-        Ok(_) => {
-            info!("Backup pushed to remote");
-        },
-        Err(e) => {
-            error!("Error pushing backup to remote: {}", e);
-        }
     }
 }
