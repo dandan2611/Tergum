@@ -18,4 +18,8 @@ pub struct Config {
     /// The number of backups to keep (including the current one)
     #[arg(short, long, default_value = "0")]
     pub rotate_count: usize,
+
+    /// Push a backup archive directly to S3
+    #[arg(short, long)]
+    pub push_only: Option<String>,
 }

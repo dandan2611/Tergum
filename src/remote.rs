@@ -31,14 +31,17 @@ pub async fn push_remote(ctx: &Ctx) {
     let prefix = get_prefix();
     let bucket = &ctx.bucket.as_ref().unwrap();
     // Push new backup
-    let backup_filename = &ctx.backup_filename;
+    let backup_filename = if ctx.config.push_only.is_none() { &ctx.backup_filename } else { &ctx.config.push_only.as_ref().unwrap() };
     info!("Pushing backup to remote");
 
     // Put object in bucket using chunked upload
-    let local_backup_filename = format!("{}{}{}", BACKUP_GROUP_DIR, FILE_SPLITTER, &backup_filename);
+    let local_backup_filename = if ctx.config.push_only.is_none() { format!("{}{}{}", BACKUP_GROUP_DIR, FILE_SPLITTER, &backup_filename) } else { backup_filename.clone() };
     info!("Opening file {}", &local_backup_filename);
     let mut file = tokio::fs::File::open(&local_backup_filename).await.unwrap();
-    let remote_filename = format!("{}{}", prefix, backup_filename);
+    // Get filename without path
+    let local_backup_filename_split: Vec<&str> = local_backup_filename.split(FILE_SPLITTER).collect();
+    let local_backup_filename = local_backup_filename_split[local_backup_filename_split.len() - 1];
+    let remote_filename = format!("{}{}", prefix, local_backup_filename);
     let result = bucket.put_object_stream(&mut file, &remote_filename).await;
     match result {
         Ok(_) => {
@@ -91,6 +94,11 @@ pub async fn push_remote(ctx: &Ctx) {
 
     let max_count = ctx.config.rotate_count;
     let mut count = 0;
+
+    if max_count == 0 {
+        info!("No rotation count set, not pruning old remote backups");
+        return;
+    }
     for backup in &backups {
         if count >= max_count {
             info!("Deleting remote {}", backup);

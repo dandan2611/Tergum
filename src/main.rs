@@ -42,19 +42,21 @@ async fn main() {
         info!("Running in dry run mode");
     }
 
-    match copy_files(&ctx) {
-        Ok(_) => {}
-        Err(_) => {
-            error!("Error copying files");
-            exit(1);
-        }
-    };
+    if ctx.config.push_only.is_none() {
+        match copy_files(&ctx) {
+            Ok(_) => {}
+            Err(_) => {
+                error!("Error copying files");
+                exit(1);
+            }
+        };
 
-    match compress_backup(&ctx) {
-        Ok(_) => {},
-        Err(()) => {
-            error!("Error compressing backup");
-            exit(1);
+        match compress_backup(&ctx) {
+            Ok(_) => {},
+            Err(()) => {
+                error!("Error compressing backup");
+                exit(1);
+            }
         }
     }
 
