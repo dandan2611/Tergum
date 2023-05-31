@@ -28,6 +28,6 @@ pub struct Config {
     pub archive_format: String,
 
     /// Backup archives has timestamp prefix
-    #[arg(short, long, default_value = "true")]
+    #[arg(short, long, default_value = "false")]
     pub timestamp_prefix: bool,
 }
