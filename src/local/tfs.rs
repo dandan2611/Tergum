@@ -1,20 +1,17 @@
-use std::cmp::min;
 use std::fs;
 use std::fs::{DirEntry, File};
-use std::io::Write;
 use std::path::Path;
 use chrono::NaiveDateTime;
 use flate2::Compression;
 use flate2::read::GzEncoder;
 
 use glob::glob;
-use log::{debug, error, info};
-use zopfli::{BlockType, Options};
+use log::{error, info};
 use crate::FILE_SPLITTER;
 
 use crate::local::reader;
 use crate::local::reader::{BACKUP_DIR, BACKUP_IGNORE, BACKUP_SRC};
-use crate::types::ctx;
+use crate::types::Ctx;
 
 pub static BACKUP_GROUP_DIR: &str = "backups";
 
@@ -46,7 +43,7 @@ pub fn copy_dir(src: &str, dest: &str, ignore: &Vec<String>) {
     }
 }
 
-pub fn copy_files(ctx: &ctx) -> Result<(), ()> {
+pub fn copy_files(ctx: &Ctx) -> Result<(), ()> {
     let mut files: Vec<String> = Vec::new();
     let mut ignore_files: Vec<String> = Vec::new();
     let src_files_res = reader::load_src_files();
@@ -139,7 +136,7 @@ pub fn copy_files(ctx: &ctx) -> Result<(), ()> {
     Ok(())
 }
 
-fn prune_old_local_backups(context: &ctx) {
+fn prune_old_local_backups(context: &Ctx) {
     let max_count = context.config.rotate_count;
 
     if max_count == 0 {
@@ -205,7 +202,7 @@ fn prune_old_local_backups(context: &ctx) {
     info!("Prune complete!");
 }
 
-pub fn compress_backup(context: &ctx) -> Result<(), ()> {
+pub fn compress_backup(context: &Ctx) -> Result<(), ()> {
     // If BACKUP_GROUP_DIR does not exist, create it
     let backup_group_meta = fs::metadata(BACKUP_GROUP_DIR);
     if backup_group_meta.is_err() {

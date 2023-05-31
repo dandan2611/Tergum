@@ -3,9 +3,9 @@ use clap::Parser;
 use log::{error, info};
 use simple_logger::SimpleLogger;
 use crate::cmd::Config;
-use crate::local::tfs::{BACKUP_GROUP_DIR, compress_backup, copy_files};
+use crate::local::tfs::{compress_backup, copy_files};
 use dotenv::dotenv;
-use crate::remote::{init_bucket, push_remote, test};
+use crate::remote::{init_bucket, push_remote};
 
 mod local;
 mod cmd;
@@ -28,7 +28,7 @@ async fn main() {
     let filename = format!("{}-backup.tar.gz", current_time_str);
 
     let config = Config::parse();
-    let mut ctx: types::ctx = types::ctx {
+    let mut ctx: types::Ctx = types::Ctx {
         backup_filename: filename,
         config,
         bucket: None,

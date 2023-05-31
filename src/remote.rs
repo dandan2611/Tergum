@@ -1,12 +1,11 @@
 use std::env;
-use std::fs::File;
 use chrono::NaiveDateTime;
 use log::{error, info};
 use s3::{Bucket, Region};
 use s3::creds::Credentials;
 use crate::FILE_SPLITTER;
 use crate::local::tfs::BACKUP_GROUP_DIR;
-use crate::types::ctx;
+use crate::types::Ctx;
 
 fn get_prefix() -> String {
     let prefix = env::var("S3_PREFIX").unwrap();
@@ -28,7 +27,7 @@ pub async fn init_bucket() -> Result<Bucket, ()> {
     }
 }
 
-pub async fn push_remote(ctx: &ctx) {
+pub async fn push_remote(ctx: &Ctx) {
     let prefix = get_prefix();
     let bucket = &ctx.bucket.as_ref().unwrap();
     // Push new backup
